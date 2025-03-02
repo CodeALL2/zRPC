@@ -1,0 +1,5 @@
+{
+  "Name": "gzinx server",
+  "Host": "0.0.0.0",
+  "Port": 9888
+}
