@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package rpc;
+
+option go_package = "/pb";
+import "google/protobuf/any.proto";  // 引入 Any 类型
+
+// RPC 请求消息
+message RpcRequest {
+  string service_name = 1;     // 服务名称
+  string method_name = 2;      // 方法名称
+  repeated string param_list= 3;  // 参数列表
+  repeated google.protobuf.Any value_list = 4;  // ✅ 任意类型 //在protobuf里面定义的各种类型
+}
+
+// 参数定义
+message Parameter {
+  string type_name = 1;        // 参数类型名称
+  bytes value = 2;             // 参数值的序列化数据
+}
+
+// RPC 响应消息
+message RpcResponse {
+  string type_name = 1;        // 返回值类型名称
+  google.protobuf.Any response_value = 2; //返回值
+  string response_message = 3;            //响应信息
+  int32 response_statue = 4; // 响应状态码
+}
+
+// 基础类型定义
+// Int32 类型
+message Int32Value {
+  int32 value = 1;
+}
+
+// Int64 类型
+message Int64Value {
+  int64 value = 1;
+}
+
+// String 类型
+message StringValue {
+  string value = 1;
+}
+
+// Bool 类型
+message BoolValue {
+  bool value = 1;
+}
+
+// Float 类型
+message FloatValue {
+  float value = 1;
+}
+
+// Double 类型
+message DoubleValue {
+  double value = 1;
+}
+
+// Bytes 类型
+message BytesValue {
+  bytes value = 1;
+}
+
+// 空值类型
+message VoidValue {
+}
+
+// 示例业务类型
+// 用户类型
+message RpcUser {
+  int64 id = 1;
+  string name = 2;
+  int32 age = 3;
+  string email = 4;
+}
+
+// 订单类型
+message Order {
+  int64 id = 1;
+  int64 user_id = 2;
+  string product_name = 3;
+  double price = 4;
+  int32 quantity = 5;
+}
+
+service Greeter {
+  rpc GetUser (RpcUser) returns (RpcResponse);
+}
