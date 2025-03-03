@@ -25,7 +25,7 @@ func NewTypeRegistry() *TypeRegistry {
 	registry.types.Store("float", &pb.FloatValue{})
 	registry.types.Store("double", &pb.DoubleValue{})
 	registry.types.Store("bytes", &pb.BytesValue{})
-	registry.types.Store("void", &pb.VoidValue{})
+	registry.types.Store("VoidValue", &pb.VoidValue{})
 
 	// 注册业务类型
 	registry.types.Store("User", &pb.User{})

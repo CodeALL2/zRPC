@@ -2,9 +2,9 @@ package imp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"reflect"
 	"zRPC/gzinx/ziface"
 	"zRPC/gzinx/znet"
@@ -83,69 +83,77 @@ func (this *TwoHandler) Handler(request ziface.IRequest) {
 	ctx := context.Background()
 	args[0] = reflect.ValueOf(ctx)
 
-	for i := 0; i < len(rpcRequest.ParamList); i++ {
-		fmt.Println("进入", i)
-		paramValue, err := util.NewTypeRegistry().GetType(rpcRequest.ParamList[i])
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		// 检查 `paramValue` 是否为 nil
-		if paramValue == nil {
-			fmt.Println("GetType() 返回了 nil")
-			return
-		}
-
-		// 检查 `ValueList[i]` 是否为空
-		if rpcRequest.ValueList[i] == nil {
-			fmt.Println("ValueList[i] 为空，无法解析参数")
-			return
-		}
-
-		// ✅ 正确的 `UnmarshalTo()`
-		if err := rpcRequest.ValueList[i].UnmarshalTo(paramValue); err != nil {
-			fmt.Println("参数解析失败:", err)
-			return
-		}
-
-		fmt.Println("参数解析成功", paramValue)
-
-		args[i+1] = reflect.ValueOf(paramValue)
-		//response := &pb.GetUserResponse{
-		//	User:    nil,
-		//	Success: false}
-		//marshal, _ := proto.Marshal(response)
-		//if err != nil {
-		//	fmt.Println(err)
-		//	request.GetConnection().SendMessage(1,[]byte(""))
+	fmt.Println("请求的参数类型", rpcRequest.ParamName)
+	paramValue, err := util.NewTypeRegistry().GetType(rpcRequest.ParamName)
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
+
+	// 检查 `paramValue` 是否为 nil
+	if paramValue == nil {
+		fmt.Println("GetType() 返回了 nil")
+		return
+	}
+
+	// 检查是否为空
+	if rpcRequest.Value == nil {
+		fmt.Println("ValueList[i] 为空，无法解析参数")
+		return
+	}
+
+	// ✅ 正确的 `UnmarshalTo()`
+	if err := rpcRequest.Value.UnmarshalTo(paramValue); err != nil {
+		fmt.Println("参数解析失败:", err)
+		return
+	}
+	fmt.Println("参数解析成功", paramValue)
+	args[1] = reflect.ValueOf(paramValue)
+	//response := &pb.GetUserResponse{
+	//	User:    nil,
+	//	Success: false}
+	//marshal, _ := proto.Marshal(response)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	request.GetConnection().SendMessage(1,[]byte(""))
+
 	result := method.Call(args)
 
 	if err, _ := result[1].Interface().(error); err != nil {
 		fmt.Println(err)
 		return
 	}
-	resPonse, ok := result[0].Interface().(*pb.RpcResponse)
 
-	if !ok {
-		fmt.Println("返回值类型出错")
+	var resultTypeName string
+
+	if result[0].Type().Kind() == reflect.Ptr {
+		fmt.Printf("类型 %s (指针类型)\n", result[0].Type().Elem().Name())
+		resultTypeName = result[0].Type().Elem().Name()
+	} else {
+		fmt.Printf("类型 %s (值类型)\n", result[0].Type().Name())
+		resultTypeName = result[0].Type().Name()
+	}
+
+	fmt.Println("返回参数的类型", resultTypeName)
+	anyValue, err := anypb.New(result[0].Interface().(proto.Message))
+	if err != nil {
+		fmt.Println("返回类型转成protobuf Message失败")
 		return
 	}
-	fmt.Println("返回状态", resPonse.ResponseStatue, "返回的类型", resPonse.TypeName)
 
-	marshal, err := proto.Marshal(resPonse)
+	response := &pb.RpcResponse{
+		TypeName:        resultTypeName,
+		ResponseValue:   anyValue,
+		ResponseMessage: "成功调用",
+		ResponseStatue:  200,
+	}
+
+	marshal, err := proto.Marshal(response)
 	request.GetConnection().SendMessage(request.GetMsgID(), marshal)
 }
 
 func (this *TwoHandler) PostHandler(request ziface.IRequest) {
 	fmt.Println("handler结束后的函数", request.GetConnection().GetRemoteAddr().String())
-}
-
-// 反序列化参数
-func (this *TwoHandler) deserializeParameter(data []byte, dest interface{}) error {
-	// 这里使用 JSON 作为中间格式，您也可以使用其他序列化方式
-	return json.Unmarshal(data, dest)
 }
 
 func (s *Server) Start() {

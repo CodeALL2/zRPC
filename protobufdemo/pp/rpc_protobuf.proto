@@ -9,8 +9,8 @@ import "google/protobuf/any.proto";  // 引入 Any 类型
 message RpcRequest {
   string service_name = 1;     // 服务名称
   string method_name = 2;      // 方法名称
-  repeated string param_list= 3;  // 参数列表
-  repeated google.protobuf.Any value_list = 4;  // ✅ 任意类型 //在protobuf里面定义的各种类型
+  string param_name= 3;  // 参数
+  google.protobuf.Any value = 4;  // ✅ 任意类型 //在protobuf里面定义的各种类型
 }
 
 // 参数定义
@@ -86,5 +86,6 @@ message Order {
 }
 
 service Greeter {
-  rpc GetUser (RpcUser) returns (RpcResponse);
+  rpc GetUser (VoidValue) returns (RpcUser);
+  rpc SetUser (RpcUser) returns (VoidValue);
 }

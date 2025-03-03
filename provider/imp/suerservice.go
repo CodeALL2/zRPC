@@ -3,7 +3,6 @@ package imp
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/anypb"
 	"zRPC/protobufdemo/pp/pb"
 )
 
@@ -13,25 +12,14 @@ type UserService struct {
 	Email string
 }
 
-func (us *UserService) GetUser(ctx context.Context, req *pb.RpcUser) (*pb.RpcResponse, error) {
-	fmt.Println("req name", req.Name)
+func (us *UserService) GetUser(ctx context.Context, req *pb.VoidValue) (*pb.RpcUser, error) {
 	rpcUser := &pb.RpcUser{
 		Id:    us.Id,
 		Name:  us.Name,
 		Email: us.Email,
 		Age:   12,
 	}
+	fmt.Println("方法已经被成功调用", rpcUser)
 
-	anyUser, err := anypb.New(rpcUser)
-
-	if err != nil {
-		return nil, err
-	}
-	response := pb.RpcResponse{
-		TypeName:        "RpcUser",
-		ResponseValue:   anyUser,
-		ResponseMessage: "调用成功",
-		ResponseStatue:  200,
-	}
-	return &response, nil
+	return rpcUser, nil
 }
