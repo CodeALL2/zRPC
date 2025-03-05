@@ -6,6 +6,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"reflect"
+	"zRPC/gzinx/utils"
 	"zRPC/gzinx/ziface"
 	"zRPC/gzinx/znet"
 	"zRPC/protobufdemo/pp/pb"
@@ -157,6 +158,11 @@ func (this *TwoHandler) PostHandler(request ziface.IRequest) {
 }
 
 func (s *Server) Start() {
+	if util.ConfigPath == "" {
+		fmt.Println("使用默认配置")
+	} else {
+		utils.Reload(util.ConfigPath) //路径配置好
+	}
 
 	zRPCServer := znet.NewServer("zRPC")
 	//需要初始话handler

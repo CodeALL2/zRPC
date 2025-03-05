@@ -44,11 +44,11 @@ func Reload(path string) {
 
 func init() {
 	GlobalObject = &GlobalObj{
-		Name:            "GzinxServer",
+		Name:            "zRPC",
 		Host:            "0.0.0.0",
 		Port:            9888,
-		Version:         "V0.4",
-		MaxConn:         100,
+		Version:         "V0.1",
+		MaxConn:         500,
 		MaxPacketSize:   4096,
 		MaxWorkPoolSize: 10,
 		MaxTaskQueueLen: 1000,
