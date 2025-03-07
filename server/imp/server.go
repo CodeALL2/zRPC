@@ -16,7 +16,8 @@ import (
 )
 
 type Server struct {
-	registry iface.IRegistry //registry注册器
+	registry       iface.IRegistry       //registry注册器
+	registryServer iface.IRegistryServer //注册中心的连接器
 }
 
 func NewServer() iface.IServer {
@@ -170,8 +171,18 @@ func (s *Server) Start() {
 	handle.AddMsgHandler(1, &TwoHandler{Server: s})
 	zRPCServer.AddMsgHandler(handle)
 	zRPCServer.Serve()
+	//整个函数结束了需要关闭相应资源
+	s.CloseRegistryServer()
 }
 
 func (s *Server) SetRegistry(registry iface.IRegistry) {
 	s.registry = registry
+}
+func (s *Server) SetRegistryServer(registry iface.IRegistryServer) {
+	s.registryServer = registry
+}
+
+func (s *Server) CloseRegistryServer() {
+	fmt.Println("销毁资源中")
+	s.registryServer.Destroy()
 }

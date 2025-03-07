@@ -17,11 +17,13 @@ type RPCClient struct {
 	addr        string
 	port        string
 	application *ZRPCApplication
+	index       int //轮询下标
 }
 
 func NewRPCClient(application *ZRPCApplication) *RPCClient {
 	return &RPCClient{
 		application: application,
+		index:       0,
 	}
 }
 
@@ -74,6 +76,7 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 	if err != nil {
 		return nil, err
 	}
+
 	serviceMetaInfo := &model.ServiceMetaInfo{
 		ServiceName:    serviceName,
 		ServiceVersion: "v1.0",
@@ -83,11 +86,25 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 		fmt.Println("获取服务列表失败")
 		return nil, err
 	}
-	metaInfo := discovery[0]
-	//与这个服务器进行连接
-	err = c.Dial(metaInfo.ServiceHost, metaInfo.ServicePort)
-	if err != nil {
-		return nil, err
+	length := len(discovery)
+	metaInfo := discovery[c.index%length] //采用轮询算法
+	c.index++
+	//获取缓存的连接池对象
+	clientCache := registryServer.GetRegistryCache().ReadCacheFromServerClientCache(metaInfo.ServiceHost + metaInfo.ServicePort)
+	if clientCache != nil {
+		c.con = clientCache
+		fmt.Println("服务提供者的缓存连接对象已命中", metaInfo.GetServiceNodeKey())
+	} else {
+		//与这个服务器进行连接
+		err = c.Dial(metaInfo.ServiceHost, metaInfo.ServicePort)
+		if err != nil {
+			fmt.Println("与服务端服务器连接失败")
+			registryServer.GetRegistryCache().FlushServerClientCache(metaInfo.ServiceHost + metaInfo.ServicePort)
+			return nil, err
+		}
+		//将连接对象加入到连接池中去
+		fmt.Println("服务提供者的缓存连接对象未命中, 已加入连接池", metaInfo.GetServiceNodeKey())
+		registryServer.GetRegistryCache().WriteCacheToServerClientCache(metaInfo.ServiceHost+metaInfo.ServicePort, c.con)
 	}
 
 	result, err := c.sendPackToServer(pack)

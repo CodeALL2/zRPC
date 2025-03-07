@@ -42,5 +42,6 @@ func main() {
 	util.ConfigPath = "F:\\zRPC\\provider\\conf\\tsconfig.json"
 	server := imp.NewServer()
 	server.SetRegistry(registry)
+	server.SetRegistryServer(registryServer)
 	server.Start()
 }

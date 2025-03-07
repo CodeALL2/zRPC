@@ -11,4 +11,6 @@ type IRegistryServer interface {
 	ServiceDiscovery(serviceKey string) ([]*model.ServiceMetaInfo, error) //返回所有服务
 	Destroy() error                                                       //注销注册中心
 	HeartBeat(duration int64)                                             //心跳服务
+	GetRegistryCache() *model.RegistryCache                               //获取注册中心相关的缓存服务
+	WatchKeys()                                                           //监听key
 }

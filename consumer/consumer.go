@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 	"zRPC/protobufdemo/pp/pb"
 	"zRPC/server/imp"
 )
@@ -16,11 +17,38 @@ func main() {
 
 	zRPC := imp.NewRPCClient(zrpcApplication) //将注册中心注入到RPCClient中去
 
-	result, err := zRPC.Invoke("IUserService", "GetUser", "VoidValue", &pb.VoidValue{})
-	if err != nil {
-		fmt.Println(err)
-		return
+	for i := 0; i < 2; i++ {
+		result, err := zRPC.Invoke("IUserService", "GetUser", "VoidValue", &pb.VoidValue{})
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		user := result.(*pb.RpcUser)
+		fmt.Println("返回值", user)
+		time.Sleep(5 * time.Second)
 	}
-	user := result.(*pb.RpcUser)
-	fmt.Println("返回值", user)
+	for i := 0; i < 2; i++ {
+		result, err := zRPC.Invoke("IUserService", "GetUser", "VoidValue", &pb.VoidValue{})
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		user := result.(*pb.RpcUser)
+		fmt.Println("返回值", user)
+		time.Sleep(5 * time.Second)
+	}
+	time.Sleep(35 * time.Second)
+	for i := 0; i < 2; i++ {
+		result, err := zRPC.Invoke("IUserService", "GetUser", "VoidValue", &pb.VoidValue{})
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		user := result.(*pb.RpcUser)
+		fmt.Println("返回值", user)
+		time.Sleep(5 * time.Second)
+	}
+
+	select {}
+
 }
