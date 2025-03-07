@@ -10,4 +10,5 @@ type IRegistryServer interface {
 	UnRegister(info *model.ServiceMetaInfo) error                         //下架服务
 	ServiceDiscovery(serviceKey string) ([]*model.ServiceMetaInfo, error) //返回所有服务
 	Destroy() error                                                       //注销注册中心
+	HeartBeat(duration int64)                                             //心跳服务
 }

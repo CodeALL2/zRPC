@@ -13,7 +13,7 @@ type ZRPCApplication struct {
 func NewZRPCApplication() *ZRPCApplication {
 	registryFactory := NewRegistryFactory()
 	return &ZRPCApplication{
-		registryConfig: &model.RegistryConfig{},
+		registryConfig: model.NewRegistryConfig(),
 		regisFactory:   registryFactory,
 	}
 }

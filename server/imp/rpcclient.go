@@ -8,25 +8,25 @@ import (
 	"net"
 	"zRPC/gzinx/znet"
 	"zRPC/protobufdemo/pp/pb"
+	"zRPC/server/model"
 	"zRPC/server/util"
 )
 
 type RPCClient struct {
-	con  net.Conn
-	addr string
-	port string
+	con         net.Conn
+	addr        string
+	port        string
+	application *ZRPCApplication
 }
 
-func NewRPCClient(addr string, port string) *RPCClient {
+func NewRPCClient(application *ZRPCApplication) *RPCClient {
 	return &RPCClient{
-		con:  nil,
-		addr: addr,
-		port: port,
+		application: application,
 	}
 }
 
-func (c *RPCClient) Dial() error {
-	con, err := net.Dial("tcp", c.addr+":"+c.port)
+func (c *RPCClient) Dial(addr string, port string) error {
+	con, err := net.Dial("tcp", addr+":"+port)
 	if err != nil {
 		fmt.Println("连接失败")
 		return err
@@ -36,6 +36,7 @@ func (c *RPCClient) Dial() error {
 }
 
 func (c *RPCClient) Invoke(serviceName string, methodName string, paramName string, value interface{}) (interface{}, error) {
+
 	_, err := util.NewTypeRegistry().GetType(paramName)
 	if err != nil {
 		fmt.Println("参数类型没有遵循protobuf协议")
@@ -44,8 +45,8 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 
 	anyValue, err := anypb.New(value.(proto.Message))
 	if err != nil {
-		return nil, err
 		fmt.Println("参数的值没有遵循protobuf协议")
+		return nil, err
 	}
 	rpcRequest := &pb.RpcRequest{
 		ServiceName: serviceName,
@@ -66,6 +67,29 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 		fmt.Println("封包失败")
 		return nil, err
 	}
+	//在这里选择一个服务端调用
+	registryConfig := c.application.GetRegistryConfig()
+	registryServer := c.application.GetRegistryFactory().GetRegistryServer(registryConfig.GetRegistryName())
+	err = registryServer.Init(registryConfig)
+	if err != nil {
+		return nil, err
+	}
+	serviceMetaInfo := &model.ServiceMetaInfo{
+		ServiceName:    serviceName,
+		ServiceVersion: "v1.0",
+	}
+	discovery, err := registryServer.ServiceDiscovery(serviceMetaInfo.GetServiceKey())
+	if err != nil {
+		fmt.Println("获取服务列表失败")
+		return nil, err
+	}
+	metaInfo := discovery[0]
+	//与这个服务器进行连接
+	err = c.Dial(metaInfo.ServiceHost, metaInfo.ServicePort)
+	if err != nil {
+		return nil, err
+	}
+
 	result, err := c.sendPackToServer(pack)
 	if err != nil {
 		fmt.Println("没有正确获取到服务器返回的protobuf数据")

@@ -17,6 +17,7 @@ func main() {
 	registryConfig := zRCApplication.GetRegistryConfig()
 	registryConfig.SetRegistry("etcd")
 	registryConfig.SetRegistryAddr("localhost:2379")
+	registryConfig.SetTimeOut(30)
 	registryFactory := zRCApplication.GetRegistryFactory()
 	registryServer := registryFactory.GetRegistryServer(registryConfig.GetRegistryName())
 	err := registryServer.Init(registryConfig)

@@ -1,20 +1,18 @@
 package model
 
-import "time"
-
 type RegistryConfig struct {
 	registry     string //注册中心类别
 	registryAddr string //注册中心地址
 	userName     string //用户名
 	password     string //密码
-	timeout      int    //超时时间
+	timeout      int64  //超时时间
 }
 
-func NewRegistryConfig(registryName string, registryAddr string) *RegistryConfig {
+func NewRegistryConfig() *RegistryConfig {
 	return &RegistryConfig{
-		registry:     registryName,
-		registryAddr: registryAddr,
-		timeout:      5,
+		registry:     "etcd",
+		registryAddr: "127.0.0.1:2379",
+		timeout:      30,
 	}
 }
 
@@ -33,6 +31,10 @@ func (s *RegistryConfig) GetRegistryAddr() string {
 	return s.registryAddr
 }
 
-func (s *RegistryConfig) GetRegistryTimeout() time.Duration {
-	return time.Duration(s.timeout) * time.Second
+func (s *RegistryConfig) GetRegistryTimeout() int64 {
+	return s.timeout
+}
+
+func (s *RegistryConfig) SetTimeOut(timeout int64) {
+	s.timeout = timeout
 }
