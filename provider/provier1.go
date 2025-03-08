@@ -29,7 +29,7 @@ func main() {
 	info := &model.ServiceMetaInfo{
 		ServiceName:    "IUserService",
 		ServiceHost:    "localhost",
-		ServicePort:    "9888",
+		ServicePort:    "9887",
 		ServiceVersion: "v1.0",
 	}
 

@@ -7,6 +7,8 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"io"
 	"net"
+	"sync"
+	"time"
 	"zRPC/gzinx/znet"
 	"zRPC/protobufdemo/pp/pb"
 	"zRPC/server/iface"
@@ -15,18 +17,20 @@ import (
 )
 
 type RPCClient struct {
-	con         net.Conn
-	addr        string
-	port        string
-	application *ZRPCApplication
-	index       int //轮询下标
-
+	serverMapLock sync.RWMutex
+	con           net.Conn
+	addr          string
+	port          string
+	application   *ZRPCApplication
+	index         int                 //轮询下标
+	serverMap     map[string]net.Conn //所有的server存储map
 }
 
 func NewRPCClient(application *ZRPCApplication) *RPCClient {
 	return &RPCClient{
 		application: application,
 		index:       0,
+		serverMap:   make(map[string]net.Conn),
 	}
 }
 
@@ -98,17 +102,18 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 	metaInfo := discovery[c.index%length] //采用轮询算法
 	c.index++
 	//获取缓存的连接池对象
-	clientCache := registryServer.GetRegistryCache().ReadCacheFromServerClientCache(metaInfo.ServiceHost + metaInfo.ServicePort)
+	clientCache := c.FindCacheServer(metaInfo)
+
 	if clientCache != nil {
 		c.con = clientCache
 		fmt.Println("服务提供者的缓存连接对象已命中", metaInfo.GetServiceNodeKey())
-
 	} else {
 		//与这个服务器进行连接
 		err = c.Dial(metaInfo.ServiceHost, metaInfo.ServicePort)
 		if err != nil {
 			fmt.Println("与服务端服务器连接失败, 清扫本地缓存, 寻找可用连接")
-			//找寻下一个可用的进行兜底
+			c.RemoveServerNodeCache(metaInfo.ServiceHost + ":" + metaInfo.ServicePort)
+			//找寻下一个可用的服务节点进行兜底
 			err := c.FindEtcdClient(registryServer, discovery)
 			if err != nil {
 				return nil, err
@@ -116,17 +121,25 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 		} else {
 			//将连接对象加入到连接池中去
 			fmt.Println("服务提供者的缓存连接对象未命中, 已加入连接池", metaInfo.GetServiceNodeKey())
-			registryServer.GetRegistryCache().WriteCacheToServerClientCache(metaInfo.ServiceHost+metaInfo.ServicePort, c.con)
+			c.AddServerCacheToMap(metaInfo, c.con)
 		}
 	}
+	var result interface{}
 
-	result, err := c.sendPackToServer(pack)
-	if err != nil {
-		//TODO  这里应该加入兜底操作，立马切换剩下的可用节点再次尝试
-		fmt.Println("没有正确获取到服务器返回的protobuf数据")
-		return nil, err
+	for {
+		result, err = c.sendPackToServer(pack)
+		if errors.Is(err, model.ErrClientNotLine) {
+			// 寻找其他可用节点
+			err := c.FindEtcdClient(registryServer, discovery)
+			if err != nil {
+				fmt.Println("没有搜寻到可用节点")
+				// 继续循环尝试，直到达到最大重试次数
+				return nil, err
+			}
+		} else { // 如果连接返回没有错误 或 错误不是连接失败导致的就直接跳出
+			break
+		}
 	}
-
 	return result, err
 }
 
@@ -149,9 +162,10 @@ func (c *RPCClient) Pack(bytesData []byte) ([]byte, error) {
 func (c *RPCClient) sendPackToServer(pack []byte) (interface{}, error) {
 	packUtils := znet.NewDataPack()
 	_, err := c.con.Write(pack)
+
 	if err != nil {
 		fmt.Println("客户端向服务器写入数据失败")
-		return nil, err
+		return nil, model.ErrClientNotLine
 	}
 
 	head := make([]byte, 8)
@@ -197,15 +211,63 @@ func (c *RPCClient) sendPackToServer(pack []byte) (interface{}, error) {
 }
 
 func (c *RPCClient) FindEtcdClient(registryServer iface.IRegistryServer, metaInfo []*model.ServiceMetaInfo) error {
+	cacheLength := len(metaInfo)
+	if cacheLength == 0 {
+		return errors.New("服务节点列表为空")
+	}
 
-	for i := 0; i < len(metaInfo); i++ {
+	fmt.Printf("开始尝试连接，共有%d个候选节点\n", cacheLength)
 
-		err := c.Dial(metaInfo[i].ServiceHost, metaInfo[i].ServicePort)
+	// 可以考虑随机打乱节点顺序，避免总是连接同一个节点
+	// rand.Shuffle(len(metaInfo), func(i, j int) { metaInfo[i], metaInfo[j] = metaInfo[j], metaInfo[i] })
+	maxLine := 3
+	for i, node := range metaInfo {
+		nodeAddr := node.ServiceHost + ":" + node.ServicePort
+		fmt.Printf("尝试连接节点 %d/%d: %s\n", i+1, cacheLength, nodeAddr)
+
+		err := c.Dial(node.ServiceHost, node.ServicePort)
 		if err == nil {
+			fmt.Printf("成功连接到节点: %s 已将其纳入本地节点缓存\n", nodeAddr)
+			c.AddServerCacheToMap(node, c.con)
 			return nil
 		}
-		//清扫本地连接缓存
-		registryServer.GetRegistryCache().FlushServerClientCache(metaInfo[i].ServiceHost + metaInfo[i].ServicePort)
+
+		fmt.Printf("连接节点失败: %s, 错误: %v\n", nodeAddr, err)
+
+		if i < maxLine && i < cacheLength-1 {
+			fmt.Printf("没有正确和服务器连接，正在进行第%d次重试操作寻找可用节点进行连接\n", i+1)
+			// 添加短暂延迟，避免频繁重试
+			time.Sleep(100 * time.Millisecond)
+		} else {
+			return errors.New("重试达到最大次数")
+		}
+		// 清除本地连接缓存
+		c.RemoveServerNodeCache(nodeAddr)
 	}
+
 	return errors.New("没有发现可用的服务提供者节点")
+}
+
+func (c *RPCClient) FindCacheServer(metaInfo *model.ServiceMetaInfo) net.Conn {
+	c.serverMapLock.RLock()
+	defer c.serverMapLock.RUnlock()
+	serverCacheKey := metaInfo.ServiceHost + ":" + metaInfo.ServicePort
+	clientCache := c.serverMap[serverCacheKey]
+	if clientCache != nil {
+		return clientCache
+	}
+	return nil
+}
+
+func (c *RPCClient) AddServerCacheToMap(metaInfo *model.ServiceMetaInfo, conn net.Conn) {
+	c.serverMapLock.Lock()
+	defer c.serverMapLock.Unlock()
+	key := metaInfo.ServiceHost + ":" + metaInfo.ServicePort
+	c.serverMap[key] = conn
+}
+
+func (c *RPCClient) RemoveServerNodeCache(serverKey string) {
+	c.serverMapLock.Lock()
+	defer c.serverMapLock.Unlock()
+	delete(c.serverMap, serverKey)
 }
