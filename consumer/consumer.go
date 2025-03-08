@@ -11,7 +11,7 @@ func main() {
 	//注册中心的注册
 	zrpcApplication := imp.NewZRPCApplication()
 	registryConfig := zrpcApplication.GetRegistryConfig()
-	registryConfig.SetRegistry("etcd")
+	registryConfig.SetRegistry("etcd-client")
 	registryConfig.SetRegistryAddr("localhost:2379")
 	registryConfig.SetTimeOut(30)
 

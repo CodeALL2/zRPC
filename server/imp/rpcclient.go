@@ -1,6 +1,7 @@
 package imp
 
 import (
+	"errors"
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -8,6 +9,7 @@ import (
 	"net"
 	"zRPC/gzinx/znet"
 	"zRPC/protobufdemo/pp/pb"
+	"zRPC/server/iface"
 	"zRPC/server/model"
 	"zRPC/server/util"
 )
@@ -18,6 +20,7 @@ type RPCClient struct {
 	port        string
 	application *ZRPCApplication
 	index       int //轮询下标
+
 }
 
 func NewRPCClient(application *ZRPCApplication) *RPCClient {
@@ -87,6 +90,11 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 		return nil, err
 	}
 	length := len(discovery)
+	if length == 0 {
+		fmt.Println("注册中心没有发现此方法")
+		return nil, err
+	}
+
 	metaInfo := discovery[c.index%length] //采用轮询算法
 	c.index++
 	//获取缓存的连接池对象
@@ -94,21 +102,27 @@ func (c *RPCClient) Invoke(serviceName string, methodName string, paramName stri
 	if clientCache != nil {
 		c.con = clientCache
 		fmt.Println("服务提供者的缓存连接对象已命中", metaInfo.GetServiceNodeKey())
+
 	} else {
 		//与这个服务器进行连接
 		err = c.Dial(metaInfo.ServiceHost, metaInfo.ServicePort)
 		if err != nil {
-			fmt.Println("与服务端服务器连接失败")
-			registryServer.GetRegistryCache().FlushServerClientCache(metaInfo.ServiceHost + metaInfo.ServicePort)
-			return nil, err
+			fmt.Println("与服务端服务器连接失败, 清扫本地缓存, 寻找可用连接")
+			//找寻下一个可用的进行兜底
+			err := c.FindEtcdClient(registryServer, discovery)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			//将连接对象加入到连接池中去
+			fmt.Println("服务提供者的缓存连接对象未命中, 已加入连接池", metaInfo.GetServiceNodeKey())
+			registryServer.GetRegistryCache().WriteCacheToServerClientCache(metaInfo.ServiceHost+metaInfo.ServicePort, c.con)
 		}
-		//将连接对象加入到连接池中去
-		fmt.Println("服务提供者的缓存连接对象未命中, 已加入连接池", metaInfo.GetServiceNodeKey())
-		registryServer.GetRegistryCache().WriteCacheToServerClientCache(metaInfo.ServiceHost+metaInfo.ServicePort, c.con)
 	}
 
 	result, err := c.sendPackToServer(pack)
 	if err != nil {
+		//TODO  这里应该加入兜底操作，立马切换剩下的可用节点再次尝试
 		fmt.Println("没有正确获取到服务器返回的protobuf数据")
 		return nil, err
 	}
@@ -180,4 +194,18 @@ func (c *RPCClient) sendPackToServer(pack []byte) (interface{}, error) {
 	}
 
 	return result, nil
+}
+
+func (c *RPCClient) FindEtcdClient(registryServer iface.IRegistryServer, metaInfo []*model.ServiceMetaInfo) error {
+
+	for i := 0; i < len(metaInfo); i++ {
+
+		err := c.Dial(metaInfo[i].ServiceHost, metaInfo[i].ServicePort)
+		if err == nil {
+			return nil
+		}
+		//清扫本地连接缓存
+		registryServer.GetRegistryCache().FlushServerClientCache(metaInfo[i].ServiceHost + metaInfo[i].ServicePort)
+	}
+	return errors.New("没有发现可用的服务提供者节点")
 }

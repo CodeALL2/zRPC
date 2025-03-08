@@ -21,5 +21,6 @@ func (r *RegistryFactory) GetRegistryServer(name string) iface.IRegistryServer {
 }
 
 func (r *RegistryFactory) InitRegistryServer() {
-	r.registryMap["etcd"] = NewEtcdRegistryServer()
+	r.registryMap["etcd-server"] = NewEtcdRegistryServer()
+	r.registryMap["etcd-client"] = NewEtcdRegistryClient()
 }

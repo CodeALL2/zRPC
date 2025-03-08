@@ -61,11 +61,11 @@ func (r *RegistryCache) GetServerClientCache() map[string]net.Conn {
 	return r.serverClientCache
 }
 
-func (r *RegistryCache) FlushMateInfoCache(key string, value *ServiceMetaInfo) {
+func (r *RegistryCache) FlushMateInfoCache(key string) {
 	r.mateInfoLock.Lock()
 	defer r.mateInfoLock.Unlock()
-	fmt.Println("键值", value.GetServiceKey(), "已清空")
-	delete(r.mateInfoCache, value.GetServiceKey())
+	fmt.Println("键值", key, "已清空")
+	delete(r.mateInfoCache, key)
 }
 
 func (r *RegistryCache) FlushServerClientCache(key string) {

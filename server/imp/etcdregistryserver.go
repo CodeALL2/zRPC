@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	clientV3 "go.etcd.io/etcd/client/v3"
-	"log"
 	"time"
 	"zRPC/server/model"
 )
 
 type EtcdRegistryServer struct {
+	BaseRegistryServer
 	client               *clientV3.Client
 	localRegistryNodeKey map[string]string
 	registryCache        *model.RegistryCache
@@ -51,12 +51,14 @@ func (s *EtcdRegistryServer) Init(config *model.RegistryConfig) error { // 注�
 			}
 		}
 	}()
+	//服务端不需要监听器
 	//监听器
-	fmt.Println("开启一个监听器")
-	s.WatchKeys()
+	//fmt.Println("开启一个监听器")
+	//s.WatchKeys()
 	return nil
 }
 
+// 服务端所属方法
 func (s *EtcdRegistryServer) Register(info *model.ServiceMetaInfo) error { // 注册服务
 	lease, err := s.client.Grant(context.Background(), 30) //创建一个续约
 	if err != nil {
@@ -85,6 +87,7 @@ func (s *EtcdRegistryServer) Register(info *model.ServiceMetaInfo) error { // �
 	return nil
 }
 
+// 服务端所属方法
 func (s *EtcdRegistryServer) UnRegister(info *model.ServiceMetaInfo) error { // 下架服务
 	registryKey := ETCD_ROOT_PAHT + info.GetServiceNodeKey()
 	_, err := s.client.Delete(context.Background(), ETCD_ROOT_PAHT+info.GetServiceNodeKey())
@@ -97,43 +100,45 @@ func (s *EtcdRegistryServer) UnRegister(info *model.ServiceMetaInfo) error { // 
 	return nil
 }
 
-func (s *EtcdRegistryServer) ServiceDiscovery(serviceKey string) ([]*model.ServiceMetaInfo, error) { //获取所有注册服务
-	//创建前缀key
-	prefixKey := ETCD_ROOT_PAHT + serviceKey
-	//优先查询本地缓存
-	mateInfoCache := s.registryCache.ReadCacheFromMateInfoCache(prefixKey)
-	if mateInfoCache != nil {
-		fmt.Println("获取注册中心的信息 缓存命中 key:", prefixKey)
-		return mateInfoCache, nil
-	}
+// 客户端专属
+//func (s *EtcdRegistryServer) ServiceDiscovery(serviceKey string) ([]*model.ServiceMetaInfo, error) { //获取所有注册服务
+//	//创建前缀key
+//	prefixKey := ETCD_ROOT_PAHT + serviceKey
+//	//优先查询本地缓存
+//	mateInfoCache := s.registryCache.ReadCacheFromMateInfoCache(prefixKey)
+//	if mateInfoCache != nil {
+//		fmt.Println("获取注册中心的信息 缓存命中 key:", prefixKey)
+//		return mateInfoCache, nil
+//	}
+//
+//	//创建上下文
+//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+//	defer cancel()
+//	//使用前缀查询
+//	resp, err := s.client.Get(ctx, prefixKey, clientV3.WithPrefix())
+//	if err != nil {
+//		log.Printf("查询服务失败: %v", err)
+//		return nil, err
+//	}
+//
+//	// 解析结果
+//	services := make([]*model.ServiceMetaInfo, 0, len(resp.Kvs))
+//	for _, kv := range resp.Kvs {
+//		service := &model.ServiceMetaInfo{}
+//		err := json.Unmarshal(kv.Value, service)
+//		if err != nil {
+//			log.Printf("解析服务信息失败: %v", err)
+//			continue
+//		}
+//		services = append(services, service)
+//	}
+//	//写入本地缓存
+//	fmt.Println("将注册中心的信息缓存到本地 key:", prefixKey)
+//	s.registryCache.WriteCacheToMateInfoCache(prefixKey, services)
+//	return services, nil
+//}
 
-	//创建上下文
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	//使用前缀查询
-	resp, err := s.client.Get(ctx, prefixKey, clientV3.WithPrefix())
-	if err != nil {
-		log.Printf("查询服务失败: %v", err)
-		return nil, err
-	}
-
-	// 解析结果
-	services := make([]*model.ServiceMetaInfo, 0, len(resp.Kvs))
-	for _, kv := range resp.Kvs {
-		service := &model.ServiceMetaInfo{}
-		err := json.Unmarshal(kv.Value, service)
-		if err != nil {
-			log.Printf("解析服务信息失败: %v", err)
-			continue
-		}
-		services = append(services, service)
-	}
-	//写入本地缓存
-	fmt.Println("将注册中心的信息缓存到本地 key:", prefixKey)
-	s.registryCache.WriteCacheToMateInfoCache(prefixKey, services)
-	return services, nil
-}
-
+// 服务端专属
 func (s *EtcdRegistryServer) Destroy() error { //注销注册中心
 
 	for key, _ := range s.localRegistryNodeKey {
@@ -155,6 +160,7 @@ func (s *EtcdRegistryServer) Destroy() error { //注销注册中心
 	return nil
 }
 
+// 服务端专属
 func (s *EtcdRegistryServer) HeartBeat(heartHz int64) { //心跳检测
 	fmt.Println("心跳检测中")
 	for registryKey, _ := range s.localRegistryNodeKey {
@@ -195,36 +201,39 @@ func (s *EtcdRegistryServer) HeartBeat(heartHz int64) { //心跳检测
 	}
 }
 
-func (s *EtcdRegistryServer) GetRegistryCache() *model.RegistryCache {
-	return s.registryCache
-}
+//// 客户端专属
+//func (s *EtcdRegistryServer) GetRegistryCache() *model.RegistryCache {
+//	return s.registryCache
+//}
 
-func (s *EtcdRegistryServer) WatchKeys() { //监听键值
-	watchChan := s.client.Watch(context.Background(), ETCD_ROOT_PAHT, clientV3.WithPrefix())
+// 客户端专属
+//func (s *EtcdRegistryServer) WatchKeys() { //监听键值
+//	watchChan := s.client.Watch(context.Background(), ETCD_ROOT_PAHT, clientV3.WithPrefix())
+//
+//	go func() {
+//		for watchResp := range watchChan {
+//			for _, event := range watchResp.Events {
+//				key := string(event.Kv.Key)
+//				value := string(event.Kv.Value)
+//
+//				switch event.Type {
+//				case clientV3.EventTypePut: // 新增或更新
+//					fmt.Printf("键 %s 已更新，新值: %s\n", key, value)
+//				case clientV3.EventTypeDelete: // 删除
+//					fmt.Printf("键 %s 已删除\n", key)
+//					var metaInfo = &model.ServiceMetaInfo{}
+//					fmt.Println("值：", value)
+//					json.Unmarshal([]byte(value), metaInfo)
+//					// 清空本地缓存
+//					s.flushCache(metaInfo)
+//				}
+//			}
+//		}
+//	}()
+//}
 
-	go func() {
-		for watchResp := range watchChan {
-			for _, event := range watchResp.Events {
-				key := string(event.Kv.Key)
-				value := string(event.Kv.Value)
-
-				switch event.Type {
-				case clientV3.EventTypePut: // 新增或更新
-					fmt.Printf("键 %s 已更新，新值: %s\n", key, value)
-				case clientV3.EventTypeDelete: // 删除
-					fmt.Printf("键 %s 已删除\n", key)
-					var metaInfo = &model.ServiceMetaInfo{}
-					fmt.Println("值：", value)
-					json.Unmarshal([]byte(value), metaInfo)
-					// 清空本地缓存
-					s.flushCache(metaInfo)
-				}
-			}
-		}
-	}()
-}
-
-func (s *EtcdRegistryServer) flushCache(info *model.ServiceMetaInfo) {
-	prefixKey := ETCD_ROOT_PAHT + info.GetServiceKey()
-	s.registryCache.FlushMateInfoCache(prefixKey, info) //将本地的key清空
-}
+// 客户端专属
+//func (s *EtcdRegistryServer) flushCache(info *model.ServiceMetaInfo) {
+//	prefixKey := ETCD_ROOT_PAHT + info.GetServiceKey()
+//	s.registryCache.FlushMateInfoCache(prefixKey, info) //将本地的key清空
+//}

@@ -15,7 +15,7 @@ func main() {
 	registry.LocalRegistry("IUserService", &imp2.UserService{Id: 1, Name: "chu", Email: "xxx"})
 	//注册中心
 	registryConfig := zRCApplication.GetRegistryConfig()
-	registryConfig.SetRegistry("etcd")
+	registryConfig.SetRegistry("etcd-server")
 	registryConfig.SetRegistryAddr("localhost:2379")
 	registryConfig.SetTimeOut(30)
 	registryFactory := zRCApplication.GetRegistryFactory()
