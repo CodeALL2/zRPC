@@ -23,7 +23,11 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		user := result.(*pb.RpcUser)
+		user, err := result.GetResult()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		fmt.Println("返回值", user)
 		time.Sleep(5 * time.Second)
 	}
@@ -33,7 +37,11 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		user := result.(*pb.RpcUser)
+		user, err := result.GetResult()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		fmt.Println("返回值", user)
 		time.Sleep(5 * time.Second)
 	}
@@ -44,11 +52,14 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		user := result.(*pb.RpcUser)
+		user, err := result.GetResult()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		fmt.Println("返回值", user)
 		time.Sleep(5 * time.Second)
 	}
 
 	select {}
-
 }

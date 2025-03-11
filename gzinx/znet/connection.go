@@ -136,6 +136,7 @@ func (c *Connection) Stop() {
 	close(c.msgChan)
 }
 
+// 产品部 李金雯 研发部 景林
 func (c *Connection) SendMessage(msgId uint32, data []byte) error {
 	//回写数据给写管理者
 	//封包
