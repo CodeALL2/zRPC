@@ -29,7 +29,8 @@ func (s *Server) Start() {
 	zRPCServer := znet.NewServer("zRPC")
 	//需要初始话handler
 	handle := znet.NewMsgHandle()
-	handle.AddMsgHandler(1, &TwoHandler{Server: s}) //处理rpc请求的handler
+	handle.AddMsgHandler(1, &TwoHandler{Server: s})   //处理rpc请求的handler
+	handle.AddMsgHandler(2, &HeartHandler{Server: s}) //处理心跳的handler
 	zRPCServer.AddMsgHandler(handle)
 	zRPCServer.Serve()
 	//整个函数结束了需要关闭相应资源

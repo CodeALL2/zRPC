@@ -50,7 +50,6 @@ func (s *EtcdRegistryClient) Init(config *model.RegistryConfig) error { // 注�
 	//		}
 	//	}
 	//}()
-
 	//监听器
 	fmt.Println("开启一个监听器")
 	s.WatchKeys()

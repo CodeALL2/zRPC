@@ -18,14 +18,15 @@ import (
 )
 
 type RPCClient struct {
-	serverMapLock sync.RWMutex
-	addr          string
-	port          string
-	application   *ZRPCApplication
-	index         int                         //轮询下标
-	serverMap     map[string]net.Conn         //所有的server存储map
-	megMap        map[string]*model.MsgResult //所有的消息
-	msgHandler    iface.IClientMsgHandle
+	serverMapLock  sync.RWMutex
+	addr           string
+	port           string
+	application    *ZRPCApplication
+	index          int                         //轮询下标
+	serverMap      map[string]net.Conn         //所有的server存储map
+	megMap         map[string]*model.MsgResult //所有的消息
+	msgHandler     iface.IClientMsgHandle
+	serverHeartMap sync.Map //维护心跳的时间
 }
 
 func NewRPCClient(application *ZRPCApplication) *RPCClient {
@@ -39,7 +40,7 @@ func NewRPCClient(application *ZRPCApplication) *RPCClient {
 	}
 	c.msgHandler.AddMsgHandler(1, &ClientRPCRouterImp{})
 	c.msgHandler.AddMsgHandler(2, &ClientHeartRouterImp{})
-	go
+	go c.heart() //开启心跳包
 	return c
 }
 
@@ -250,7 +251,8 @@ func (c *RPCClient) AddServerCacheToMap(metaInfo *model.ServiceMetaInfo, conn ne
 	c.serverMapLock.Lock()
 	defer c.serverMapLock.Unlock()
 	c.serverMap[key] = conn
-	go c.reader(conn, key) //在这里开启读协程
+	c.serverHeartMap.Store(key, time.Now().Unix()) //将此节点加入心跳维护
+	go c.reader(conn, key)                         //在这里开启读协程
 }
 
 func (c *RPCClient) RemoveServerNodeCache(serverKey string) {
@@ -265,7 +267,8 @@ func (c *RPCClient) reader(con net.Conn, serverKey string) {
 		head := make([]byte, 8)
 		if _, err := io.ReadFull(con, head); err != nil {
 			fmt.Println("客户端读取头数据失败, 清理本地缓存")
-			//清理本地socket缓存
+			//清理本地socket缓存 以及心跳组
+			c.serverHeartMap.Delete(serverKey)
 			c.RemoveServerNodeCache(serverKey)
 			return
 			//TODO 读取失败应该进行一系列兜底操作
@@ -276,6 +279,7 @@ func (c *RPCClient) reader(con net.Conn, serverKey string) {
 		if err != nil {
 			fmt.Println("客户端解析头数据失败,服务端没有遵循协议要求, 清理本地缓存")
 			//TODO 读取失败应该进行一系列兜底操作
+			c.serverHeartMap.Delete(serverKey)
 			c.RemoveServerNodeCache(serverKey)
 			return
 		}
@@ -284,26 +288,69 @@ func (c *RPCClient) reader(con net.Conn, serverKey string) {
 		if _, err = io.ReadFull(con, body); err != nil {
 			fmt.Println("客户端解析消息体数据失败, 清理本地缓存")
 			//TODO 读取失败应该进行一系列兜底操作
+			c.serverHeartMap.Delete(serverKey)
 			c.RemoveServerNodeCache(serverKey)
 			return
 		}
 		requestMessage.SetMsg(body)
 
 		request := &model.ClientMsgRequest{
-			MessageMap: c.megMap,
-			Con:        con,
-			Data:       requestMessage,
+			MessageMap:     c.megMap,
+			Con:            con,
+			Data:           requestMessage,
+			HeartServerMap: &c.serverHeartMap,
 		}
-
 		//将消息投入handler
 		c.msgHandler.SendMessageToClientQueue(request)
 	}
 }
 
-func (c *RPCClient)heart(){
-	for _, value := range c.serverMap{
-		//封包
+// 这里可以添加一个回复时间表，如果超过了某一个阈值 就会剔除此节点
+func (c *RPCClient) heart() {
+	ticker := time.NewTicker(5 * time.Second) // 每 5 秒执行一次
+	defer ticker.Stop()
 
-		value.Write()
+	for range ticker.C { // 每次触发时执行
+		for key, value := range c.serverMap {
+			timer := false // 时间阈值
+
+			load, ok := c.serverHeartMap.Load(key)
+			if !ok {
+				continue
+			}
+			// load 是时间戳
+			if timestamp, ok := load.(int64); ok {
+				if time.Now().Unix()-timestamp > 15 {
+					// 当前时间戳比 load 大 15 秒以上
+					fmt.Println("当前节点", key, "触发时间期限阈值")
+					timer = true // 将阈值打开
+				}
+			}
+
+			data := []byte(key)
+			message := &znet.Message{
+				Id:     2, // 心跳包 id
+				Msg:    data,
+				Length: uint32(len(data)),
+			}
+			//// 封包
+			pack, err := znet.NewDataPack().Pack(message)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			_, err = value.Write(pack)
+			if err != nil {
+				fmt.Println(err)
+				// 此节点写入失败 查看时间阈值是否也触发
+				if timer {
+					// 剔除此节点
+					c.serverHeartMap.Delete(key)
+					c.RemoveServerNodeCache(key)
+					fmt.Println("节点", key, "同时触发时间阈值和次数阈值，剔除此节点")
+				}
+			}
+			fmt.Println("心跳包已发送：", key)
+		}
 	}
 }
