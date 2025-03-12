@@ -5,6 +5,7 @@ type IRouter interface {
 	PreHandler(IRequest)
 	//处理业务的方法
 	Handler(IRequest)
+
 	//处理业务之后的方法
 	PostHandler(IRequest)
 }

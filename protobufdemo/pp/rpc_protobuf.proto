@@ -7,10 +7,11 @@ import "google/protobuf/any.proto";  // 引入 Any 类型
 
 // RPC 请求消息
 message RpcRequest {
-  string service_name = 1;     // 服务名称
-  string method_name = 2;      // 方法名称
-  string param_name= 3;  // 参数
-  google.protobuf.Any value = 4;  // ✅ 任意类型 //在protobuf里面定义的各种类型
+  string  msgId = 1; //消息的唯一id标识
+  string service_name = 2;     // 服务名称
+  string method_name = 3;      // 方法名称
+  string param_name= 4; // 参数
+  google.protobuf.Any value = 5;  // ✅ 任意类型 //在protobuf里面定义的各种类型
 }
 
 // 参数定义
@@ -21,10 +22,11 @@ message Parameter {
 
 // RPC 响应消息
 message RpcResponse {
-  string type_name = 1;        // 返回值类型名称
-  google.protobuf.Any response_value = 2; //返回值
-  string response_message = 3;            //响应信息
-  int32 response_statue = 4; // 响应状态码
+  string  msgId = 1; //消息的唯一id标识
+  string type_name = 2;        // 返回值类型名称
+  google.protobuf.Any response_value = 3; //返回值
+  string response_message = 4;            //响应信息
+  int32 response_statue = 5; // 响应状态码
 }
 
 // 基础类型定义
